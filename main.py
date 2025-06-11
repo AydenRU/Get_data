@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi import HTTPException
-from pydantic import BaseModel
+
 import asyncio
 import json
-from BD import lifelist, get_post_db, get_post_id_db
+
+from pydantic import BaseModel
+
+from BD import lifelist, DataBase
 
 app = FastAPI(lifespan=lifelist)
 
@@ -23,14 +26,14 @@ async def get_post() -> dict:
     ],
     total_results: <int>
     """
-    result_data = await get_post_db()
+    result_data = await DataBase.get_post_db()
 
     return {'posts': [result_data['posts']], 'total_result': result_data['total_result']}
 
 @app.get('/posts/{id}')
 async def get_post_id(id: int) -> dict:
     """Асинхронно ищу Комментарии и Пост"""
-    result_post = await get_post_id_db(id)
+    result_post = await DataBase.get_post_id_db(id)
     return result_post
 
 

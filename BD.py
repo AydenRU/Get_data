@@ -1,18 +1,14 @@
-from asyncio import gather
-
 import asyncpg
-import asyncio
 from asyncpg import Connection, Pool
 
 from contextlib import asynccontextmanager
 
 from processing_data import data_post, data_comments
-from processing_data import jsontime_in_time
+from processing_data import WorkInData
 
 # curses = asyncpg.connect(host='localhost', user='postgres', password='postgres', database='postgres')
 
 pool: Pool = None
-
 
 @asynccontextmanager
 async def lifelist(app: "FastAPI"):
@@ -59,56 +55,60 @@ async def create_db():
     except Exception as error:
         print(error)
 
-
-async def json_load_in_bd(data_post, data_comments):
+async def json_load_in_bd(data_post: dict, data_comments: dict) -> None:
     try:
         async with pool.acquire() as cursor:
             async with cursor.transaction():
                 await cursor.executemany("""INSERT INTO post (title, body, author, created_at)
                                         VALUES ($1, $2, $3, $4)
-                                        """, ((post['title'], post['body'], post['author'], jsontime_in_time(post['created_at'])) for post in data_post))
-#
+                                        """, ((post['title'], post['body'], post['author'], WorkInData.jsontime_in_time(post['created_at'])) for post in data_post))
+
                 await cursor.executemany("""INSERT INTO comments (post_id, comment, created_at, comment_user)
                                         VALUES ($1, $2, $3, $4)
-                                        """, ((comment['post_id'], comment['comment'], jsontime_in_time(comment['created_at']), comment['user']) for comment in data_comments))
+                                        """, ((comment['post_id'], comment['comment'], WorkInData.jsontime_in_time(comment['created_at']), comment['user']) for comment in data_comments))
     except Exception as error:
         print(error)
 
-async def get_post_db() -> dict:
-    try:
-        async with pool.acquire() as cursor:
-            async with cursor.transaction():
-                data = await cursor.fetch("""SELECT * FROM post""")
-
-                row = await cursor.fetchval("""SELECT COUNT(*) FROM post""")
-
-        return {'posts': [dict(row) for row in data], 'total_result': row}
 
 
-    except Exception as error:
-        print(error)
+class DataBase:
 
-async def get_post_id_db(id: int) -> dict:
-    """
-    Ты получаешь:
-    {'post': post, 'comments': comments}
-    """
-    try:
-        async with pool.acquire() as cursor:
-            async with cursor.transaction():
-                post = await cursor.fetchrow("""SELECT * FROM post WHERE id = $1""", id)
-                comments = await cursor.fetch("""SELECT * FROM comments WHERE post_id = $1""", id)
+    @staticmethod
+    async def get_post_db() -> dict[list[dict] & str]:
+        try:
+            async with pool.acquire() as cursor:
+                async with cursor.transaction():
+                    data = await cursor.fetch("""SELECT * FROM post""")
 
-        if not comments:
-            comments = "У данного поста еще нету комментариев"
-        else:
+                    row = await cursor.fetchval("""SELECT COUNT(*) FROM post""")
 
-            comments = [dict(comment) for comment in comments]
-        post = dict(post)
+            return {'posts': [dict(row) for row in data], 'total_result': row}
 
-        return {'post': post, 'comments': comments}
+        except Exception as error:
+            print(error)
 
-    except Exception as error:
-        print(error)
-        return {'error': 'Ошибка сервера'}
+    @staticmethod
+    async def get_post_id_db(id_post: int) -> dict:
+        """
+        Ты получаешь:
+        {'post': post, 'comments': comments}
+        """
+        try:
+            async with pool.acquire() as cursor:
+                async with cursor.transaction():
+                    post = await cursor.fetchrow("""SELECT * FROM post WHERE id = $1""", id_post)
+                    comments = await cursor.fetch("""SELECT * FROM comments WHERE post_id = $1""", id_post)
+
+            if not comments:
+                comments = "У данного поста еще нету комментариев"
+            else:
+                comments = [dict(comment) for comment in comments]
+
+            post = dict(post)
+
+            return {'post': post, 'comments': comments}
+
+        except Exception as error:
+            print(error)
+            return {'error': 'Ошибка сервера'}
 
